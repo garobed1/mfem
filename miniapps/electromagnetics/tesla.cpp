@@ -196,10 +196,10 @@ int main(int argc, char *argv[])
 
    // Refine the serial mesh on all processors to increase the resolution. In
    // this example we do 'ref_levels' of uniform refinement.
-   for (int l = 0; l < serial_ref_levels; l++)
-   {
-      mesh->UniformRefinement();
-   }
+   // for (int l = 0; l < serial_ref_levels; l++)
+   // {
+   //    mesh->UniformRefinement();
+   // }
 
    // Define a parallel mesh by a partitioning of the serial mesh. Refine
    // this mesh further in parallel to increase the resolution. Once the
@@ -208,11 +208,11 @@ int main(int argc, char *argv[])
    delete mesh;
 
    // Refine this mesh in parallel to increase the resolution.
-   int par_ref_levels = parallel_ref_levels;
-   for (int l = 0; l < par_ref_levels; l++)
-   {
-      pmesh.UniformRefinement();
-   }
+   // int par_ref_levels = parallel_ref_levels;
+   // for (int l = 0; l < par_ref_levels; l++)
+   // {
+   //    pmesh.UniformRefinement();
+   // }
    // Make sure tet-only meshes are marked for local refinement.
    pmesh.Finalize(true);
 
@@ -404,17 +404,13 @@ SetupInvPermeabilityCoefficient()
 // A spherical shell with constant permeability.  The sphere has inner
 // and outer radii, center, and relative permeability specified on the
 // command line and stored in ms_params_.
+
+//CHANGING FOR LEFT AND RIGHT HALF OF 2D DOMAIN
+//GIVE 2 OPTIONS FOR 2D DOMAIN
 double magnetic_shell(const Vector &x)
 {
-   double r2 = 0.0;
 
-   for (int i = 0; i < x.Size(); i++)
-   {
-      r2 += (x(i) - ms_params_(i))*(x(i) - ms_params_(i));
-   }
-
-   if ( sqrt(r2) >= ms_params_(x.Size()) &&
-        sqrt(r2) <= ms_params_(x.Size()+1) )
+   if ( x(0) <= .5)
    {
       return mu0_*ms_params_(x.Size()+2);
    }
