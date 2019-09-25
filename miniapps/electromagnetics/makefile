@@ -22,7 +22,7 @@ MFEM_LIB_FILE = mfem_is_not_built
 -include $(CONFIG_MK)
 
 SEQ_MINIAPPS =
-PAR_MINIAPPS = volta tesla maxwell joule
+PAR_MINIAPPS = volta tesla maxwell joule conform
 ifeq ($(MFEM_USE_MPI),NO)
    MINIAPPS = $(SEQ_MINIAPPS)
 else
@@ -43,12 +43,12 @@ COMMON_O=../common/pfem_extras.o
 all: $(MINIAPPS)
 
 # Rules for building the miniapps
-%: $(SRC)%.cpp %_solver.o $(COMMON_O) $(MFEM_LIB_FILE) $(CONFIG_MK)
+%: $(SRC)%.cpp tesla_solver.o $(COMMON_O) $(MFEM_LIB_FILE) $(CONFIG_MK)
 	$(MFEM_CXX) $(MFEM_FLAGS) -c $(<)
-	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $@.o $@_solver.o $(COMMON_O) $(MFEM_LIBS)
+	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $@.o $ tesla_solver.o $(COMMON_O) $(MFEM_LIBS)
 
 # Rules for compiling miniapp dependencies
-$(COMMON_O) $(addsuffix _solver.o,$(MINIAPPS)): \
+$(COMMON_O) $(tesla_solver.o,$(MINIAPPS)): \
 %.o: $(SRC)%.cpp $(SRC)%.hpp $(CONFIG_MK)
 	$(MFEM_CXX) $(MFEM_FLAGS) -c $(<) -o $(@)
 

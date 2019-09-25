@@ -10,6 +10,12 @@
 # Software Foundation) version 2.1 dated February 1999.
 
 if (MFEM_USE_MPI)
+  add_mfem_miniapp(conform
+    MAIN conform.cpp
+    EXTRA_SOURCES tesla_solver.cpp
+    EXTRA_HEADERS tesla_solver.hpp ${MFEM_MINIAPPS_COMMON_HEADERS}
+    LIBRARIES mfem mfem_miniapps_common)
+
   add_mfem_miniapp(tesla
     MAIN tesla.cpp
     EXTRA_SOURCES tesla_solver.cpp

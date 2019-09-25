@@ -70,10 +70,8 @@ using namespace mfem::electromagnetics;
 // Permeability Function
 Coefficient * SetupInvPermeabilityCoefficient();
 
-static Vector pw_mu_(0);      // Piecewise permeability values
-static Vector pw_mu_inv_(0);  // Piecewise inverse permeability values
-static Vector ms_params_(0);  // Center, Inner and Outer Radii, and
-//                               Permeability of magnetic shell
+static Vector ms_params_(0);  // Just Permeability
+
 double magnetic_shell(const Vector &);
 double magnetic_shell_inv(const Vector & x) { return 1.0/magnetic_shell(x); }
 
@@ -93,6 +91,7 @@ static Vector ha_params_(0);  // Bounding box,
 //                               rotation axis index
 //                               and number of segments
 void halbach_array(const Vector &, Vector &);
+
 
 // A Field Boundary Condition for B = (Bx,By,Bz)
 static Vector b_uniform_(0);
@@ -135,8 +134,6 @@ int main(int argc, char *argv[])
                   "Number of parallel refinement levels.");
    args.AddOption(&b_uniform_, "-ubbc", "--uniform-b-bc",
                   "Specify if the three components of the constant magnetic flux density");
-   args.AddOption(&pw_mu_, "-pwm", "--piecewise-mu",
-                  "Piecewise values of Permeability");
    args.AddOption(&ms_params_, "-ms", "--magnetic-shell-params",
                   "Center, Inner Radius, Outer Radius, and Permeability of Magnetic Shell");
    args.AddOption(&cr_params_, "-cr", "--current-ring-params",
@@ -379,25 +376,8 @@ SetupInvPermeabilityCoefficient()
 {
    Coefficient * coef = NULL;
 
-   if ( ms_params_.Size() > 0 )
-   {
-      coef = new FunctionCoefficient(magnetic_shell_inv);
-   }
-   else if ( pw_mu_.Size() > 0 )
-   {
-      pw_mu_inv_.SetSize(pw_mu_.Size());
-      for (int i = 0; i < pw_mu_.Size(); i++)
-      {
-         MFEM_ASSERT( pw_mu_[i] > 0.0, "permeability values must be positive" );
-         pw_mu_inv_[i] = 1.0/pw_mu_[i];
-      }
-      coef = new PWConstCoefficient(pw_mu_inv_);
-   }
-   else
-   {
-      coef = new ConstantCoefficient(1.0/mu0_);
-   }
-
+   coef = new FunctionCoefficient(magnetic_shell_inv);
+   
    return coef;
 }
 

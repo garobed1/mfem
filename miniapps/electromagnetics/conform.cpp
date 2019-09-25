@@ -7,7 +7,7 @@
 //                     Curl 1/mu Curl A = J + Curl mu0/mu M
 //
 // The permeability function is piecewise, left half of a square domain a 
-// given permeability, and right half free space
+// given permeability and current density, and right half free space
 //
 // boundary conditions periodic from top to bottom
 //
@@ -38,9 +38,8 @@ double magnetic_shell(const Vector &);
 double magnetic_shell_inv(const Vector & x) { return 1.0/magnetic_shell(x); }
 
 // Current Density Function
-static Vector cr_params_(0);  // Axis Start, Axis End, Inner Ring Radius,
-//                               Outer Ring Radius, and Total Current
-//                               of current ring (annulus)
+static Vector cr_params_(0);  // magnitude of downward current 
+
 void current_ring(const Vector &, Vector &);
 
 // Magnetization
@@ -127,7 +126,7 @@ int main(int argc, char *argv[])
    }
 
    // Generate structured unit square mesh
-   int v = 4;
+   int v = 21;
    int Nelem = h_num*(v-1)*2; //h*w*2 triangles
    int Nvert = (h_num+1)*(v);
 
@@ -188,6 +187,7 @@ int main(int argc, char *argv[])
    {
       cout << "Starting initialization." << endl;
    }
+
 
 
    // Ensure that quad and hex meshes are treated as non-conforming.
@@ -261,103 +261,110 @@ int main(int argc, char *argv[])
    // the worst elements and update all objects to work with the new mesh. We
    // refine until the maximum number of dofs in the Nedelec finite element
    // space reaches 10 million.
-   const int max_dofs = 10000000;
-   for (int it = 1; it <= maxit; it++)
-   {
-      if (mpi.Root())
-      {
-         cout << "\nAMR Iteration " << it << endl;
-      }
+   // const int max_dofs = 10000000;
+   // for (int it = 1; it <= maxit; it++)
+   // {
+   //    if (mpi.Root())
+   //    {
+   //       cout << "\nAMR Iteration " << it << endl;
+   //    }
 
-      // Display the current number of DoFs in each finite element space
-      Tesla.PrintSizes();
+   //    // Display the current number of DoFs in each finite element space
+   Tesla.PrintSizes();
 
       // Assemble all forms
-      Tesla.Assemble();
-
+   Tesla.Assemble();
+   cout <<"hello \n";
       // Solve the system and compute any auxiliary fields
-      Tesla.Solve();
+   Tesla.Solve();
 
       // Determine the current size of the linear system
-      int prob_size = Tesla.GetProblemSize();
+   int prob_size = Tesla.GetProblemSize();
 
-      // Write fields to disk for VisIt
-      if ( visit )
-      {
-         Tesla.WriteVisItFields(it);
-      }
+      // // Write fields to disk for VisIt
+      // if ( visit )
+      // {
+      //    Tesla.WriteVisItFields(it);
+      // }
 
-      // Send the solution by socket to a GLVis server.
-      if (visualization)
-      {
-         Tesla.DisplayToGLVis();
-      }
+      // // Send the solution by socket to a GLVis server.
+      // if (visualization)
+      // {
+      //    Tesla.DisplayToGLVis();
+      // }
 
-      if (mpi.Root())
-      {
-         cout << "AMR iteration " << it << " complete." << endl;
-      }
+      // if (mpi.Root())
+      // {
+      //    cout << "AMR iteration " << it << " complete." << endl;
+      // }
 
-      // Check stopping criteria
-      if (prob_size > max_dofs)
-      {
-         if (mpi.Root())
-         {
-            cout << "Reached maximum number of dofs, exiting..." << endl;
-         }
-         break;
-      }
-      if ( it == maxit )
-      {
-         break;
-      }
+      // // Check stopping criteria
+      // if (prob_size > max_dofs)
+      // {
+      //    if (mpi.Root())
+      //    {
+      //       cout << "Reached maximum number of dofs, exiting..." << endl;
+      //    }
+      //    break;
+      // }
+      // if ( it == maxit )
+      // {
+      //    break;
+      // }
 
-      // Wait for user input. Ask every 10th iteration.
-      char c = 'c';
-      if (mpi.Root() && (it % 10 == 0))
-      {
-         cout << "press (q)uit or (c)ontinue --> " << flush;
-         cin >> c;
-      }
-      MPI_Bcast(&c, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
+      // // Wait for user input. Ask every 10th iteration.
+      // char c = 'c';
+      // if (mpi.Root() && (it % 10 == 0))
+      // {
+      //    cout << "press (q)uit or (c)ontinue --> " << flush;
+      //    cin >> c;
+      // }
+      // MPI_Bcast(&c, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-      if (c != 'c')
-      {
-         break;
-      }
+      // if (c != 'c')
+      // {
+      //    break;
+      // }
 
       // Estimate element errors using the Zienkiewicz-Zhu error estimator.
-      Vector errors(pmesh.GetNE());
-      Tesla.GetErrorEstimates(errors);
+   Vector errors(pmesh.GetNE());
+   Tesla.GetErrorEstimates(errors);
 
-      double local_max_err = errors.Max();
-      double global_max_err;
-      MPI_Allreduce(&local_max_err, &global_max_err, 1,
-                    MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+   double local_max_err = errors.Max();
+   double global_max_err;
+   MPI_Allreduce(&local_max_err, &global_max_err, 1,
+                 MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
 
-      // Refine the elements whose error is larger than a fraction of the
-      // maximum element error.
-      const double frac = 0.5;
-      double threshold = frac * global_max_err;
-      if (mpi.Root()) { cout << "Refining ..." << endl; }
-      pmesh.RefineByError(errors, threshold);
+      // // Refine the elements whose error is larger than a fraction of the
+      // // maximum element error.
+      // const double frac = 0.5;
+      // double threshold = frac * global_max_err;
+      // if (mpi.Root()) { cout << "Refining ..." << endl; }
+      // pmesh.RefineByError(errors, threshold);
 
-      // Update the magnetostatic solver to reflect the new state of the mesh.
-      Tesla.Update();
+      // // Update the magnetostatic solver to reflect the new state of the mesh.
+      // Tesla.Update();
 
-      if (pmesh.Nonconforming() && mpi.WorldSize() > 1)
-      {
-         if (mpi.Root()) { cout << "Rebalancing ..." << endl; }
-         pmesh.Rebalance();
+      // if (pmesh.Nonconforming() && mpi.WorldSize() > 1)
+      // {
+      //    if (mpi.Root()) { cout << "Rebalancing ..." << endl; }
+      //    pmesh.Rebalance();
 
-         // Update again after rebalancing
-         Tesla.Update();
-      }
-   }
+      //    // Update again after rebalancing
+      //    Tesla.Update();
+   //    // }
+   // {
+   //    ofstream mesh_ofs("displaced.vtk");
+   //    mesh_ofs.precision(8);
+   //    mesh->PrintVTK(mesh_ofs, 0);
+   //    ofstream sol_ofs("sol.gf");
+   //    sol_ofs.precision(8);
+   //    x.SaveVTK(mesh_ofs, "sol", 0);
+   // }
+
 
    delete muInvCoef;
 
-   #endif
    return 0;
 }
 
@@ -389,7 +396,6 @@ SetupInvPermeabilityCoefficient()
 // command line and stored in ms_params_.
 
 //CHANGING FOR LEFT AND RIGHT HALF OF 2D DOMAIN
-//GIVE 2 OPTIONS FOR 2D DOMAIN
 double magnetic_shell(const Vector &x)
 {
 
@@ -400,59 +406,67 @@ double magnetic_shell(const Vector &x)
    return mu0_;
 }
 
-// An annular ring of current density.  The ring has two axis end
-// points, inner and outer radii, and a constant current in Amperes.
+// Left half is conductor with some current density
 void current_ring(const Vector &x, Vector &j)
 {
-   MFEM_ASSERT(x.Size() == 3, "current_ring source requires 3D space.");
+   //MFEM_ASSERT(x.Size() == 3, "current_ring source requires 3D space.");
 
    j.SetSize(x.Size());
    j = 0.0;
 
-   Vector  a(x.Size());  // Normalized Axis vector
-   Vector xu(x.Size());  // x vector relative to the axis end-point
-   Vector ju(x.Size());  // Unit vector in direction of current
+   // Vector  a(x.Size());  // Normalized Axis vector
+   // Vector xu(x.Size());  // x vector relative to the axis end-point
+   // Vector ju(x.Size());  // Unit vector in direction of current
 
-   xu = x;
+   // xu = x;
 
-   for (int i=0; i<x.Size(); i++)
+   // for (int i=0; i<x.Size(); i++)
+   // {
+   //    xu[i] -= cr_params_[i];
+   //    a[i]   = cr_params_[x.Size()+i] - cr_params_[i];
+   // }
+
+   // double h = a.Norml2();
+
+   // if ( h == 0.0 )
+   // {
+   //    return;
+   // }
+
+   // double ra = cr_params_[2*x.Size()+0];
+   // double rb = cr_params_[2*x.Size()+1];
+   // if ( ra > rb )
+   // {
+   //    double rc = ra;
+   //    ra = rb;
+   //    rb = rc;
+   // }
+   // double xa = xu*a;
+
+   // if ( h > 0.0 )
+   // {
+   //    xu.Add(-xa/(h*h),a);
+   // }
+
+   // double xp = xu.Norml2();
+
+   // if ( xa >= 0.0 && xa <= h*h && xp >= ra && xp <= rb )
+   // {
+   //    ju(0) = a(1) * xu(2) - a(2) * xu(1);
+   //    ju(1) = a(2) * xu(0) - a(0) * xu(2);
+   //    ju(2) = a(0) * xu(1) - a(1) * xu(0);
+   //    ju /= h;
+
+   //    j.Add(cr_params_[2*x.Size()+2]/(h*(rb-ra)),ju);
+   // }
+
+   if (x(0) <= .5)
    {
-      xu[i] -= cr_params_[i];
-      a[i]   = cr_params_[x.Size()+i] - cr_params_[i];
+      j(2) = -cr_params_(0);
    }
-
-   double h = a.Norml2();
-
-   if ( h == 0.0 )
+   else 
    {
-      return;
-   }
-
-   double ra = cr_params_[2*x.Size()+0];
-   double rb = cr_params_[2*x.Size()+1];
-   if ( ra > rb )
-   {
-      double rc = ra;
-      ra = rb;
-      rb = rc;
-   }
-   double xa = xu*a;
-
-   if ( h > 0.0 )
-   {
-      xu.Add(-xa/(h*h),a);
-   }
-
-   double xp = xu.Norml2();
-
-   if ( xa >= 0.0 && xa <= h*h && xp >= ra && xp <= rb )
-   {
-      ju(0) = a(1) * xu(2) - a(2) * xu(1);
-      ju(1) = a(2) * xu(0) - a(0) * xu(2);
-      ju(2) = a(0) * xu(1) - a(1) * xu(0);
-      ju /= h;
-
-      j.Add(cr_params_[2*x.Size()+2]/(h*(rb-ra)),ju);
+      j = 0.0;
    }
 }
 

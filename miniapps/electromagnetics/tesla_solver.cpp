@@ -236,19 +236,23 @@ TeslaSolver::PrintSizes()
 void
 TeslaSolver::Assemble()
 {
-   if (myid_ == 0) { cout << "Assembling ..." << flush; }
+   if (myid_ == 0) { cout << "Assembling 1..." << flush; }
 
    curlMuInvCurl_->Assemble();
    curlMuInvCurl_->Finalize();
+   if (myid_ == 0) { cout << "Assembling 2..." << flush; }
 
    hDivHCurlMuInv_->Assemble();
    hDivHCurlMuInv_->Finalize();
+   if (myid_ == 0) { cout << "Assembling 3..." << flush; }
 
    hCurlMass_->Assemble();
    hCurlMass_->Finalize();
+   if (myid_ == 0) { cout << "Assembling 4..." << flush; }
 
    curl_->Assemble();
    curl_->Finalize();
+   if (myid_ == 0) { cout << "Assembling 5..." << flush; }
 
    if ( grad_ )
    {
