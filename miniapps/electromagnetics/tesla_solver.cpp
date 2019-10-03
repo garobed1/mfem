@@ -101,6 +101,7 @@ TeslaSolver::TeslaSolver(ParMesh & pmesh, int order,
    }
    else
    {
+      cout<<"sup\n";
       aBCCoef_ = new VectorFunctionCoefficient(pmesh_->SpaceDimension(),
                                                *a_bc_);
    }
@@ -108,6 +109,7 @@ TeslaSolver::TeslaSolver(ParMesh & pmesh, int order,
    // Volume Current Density
    if ( j_src_ != NULL )
    {
+      cout<<"sup2\n";
       jCoef_ = new VectorFunctionCoefficient(pmesh_->SpaceDimension(),
                                              j_src_);
    }
@@ -331,6 +333,7 @@ TeslaSolver::Solve()
    if ( jr_ )
    {
       jr_->ProjectCoefficient(*jCoef_);
+            cout <<"hello?\n";
 
       // Compute the discretely divergence-free portion of jr_
       DivFreeProj_->Mult(*jr_, *j_);
@@ -362,7 +365,7 @@ TeslaSolver::Solve()
 
    HyprePCG pcg (CurlMuInvCurl);
    pcg.SetTol(1e-12);
-   pcg.SetMaxIter(50);
+   pcg.SetMaxIter(100);
    pcg.SetPrintLevel(2);
    pcg.SetPreconditioner(ams);
    pcg.Mult(RHS, A);

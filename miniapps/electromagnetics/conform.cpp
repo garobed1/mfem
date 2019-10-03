@@ -21,6 +21,17 @@
 #include <fstream>
 #include <iostream>
 
+#ifdef MFEM_USE_SIMMETRIX
+#include <SimUtil.h>
+#include <gmi_sim.h>
+#endif
+#include <apfMDS.h>
+#include <gmi_null.h>
+#include <PCU.h>
+#include <apfConvert.h>
+#include <gmi_mesh.h>
+#include <crv.h>
+
 using namespace std;
 using namespace mfem;
 using namespace mfem::electromagnetics;
@@ -34,14 +45,17 @@ int h_num;
 
 static Vector pw_mu_(0);
 
+double error;
+const double pi = 3.141592653589; 
+double r;
 double magnetic_shell(const Vector &);
 double magnetic_shell_inv(const Vector & x) { return 1.0/magnetic_shell(x); }
-
+double r_param = .001;
 // Current Density Function
 static Vector cr_params_(0);  // magnitude of downward current 
 
 void current_ring(const Vector &, Vector &);
-
+void sol_analytic(const Vector &, Vector &);
 // Magnetization
 static Vector bm_params_(0);  // Axis Start, Axis End, Bar Radius,
 //                               and Magnetic Field Magnitude
@@ -67,10 +81,16 @@ int main(int argc, char *argv[])
 {
    MPI_Session mpi(argc, argv);
 
-   if ( mpi.Root() ) { display_banner(cout); }
+   //if ( mpi.Root() ) { display_banner(cout); }
 
    // Parse command-line options.
-   // const char *mesh_file = "../../data/ball-nurbs.mesh";
+   // 2. Parse command-line options.
+   const char *mesh_file = "../../../cad/wire.smb";
+   #ifdef MFEM_USE_SIMMETRIX
+   const char *model_file = "../../../cad/wire_nc.x_t";
+   #else
+   const char *model_file = "../../../cad/wire_nc.dmg";
+   #endif
    int order = 1;
    int maxit = 100;
    int serial_ref_levels = 0;
@@ -84,6 +104,10 @@ int main(int argc, char *argv[])
    Vector vbcv;
 
    OptionsParser args(argc, argv);
+   args.AddOption(&mesh_file, "-m", "--mesh",
+                  "Mesh file to use.");
+   args.AddOption(&r_param, "-Rp", "--wire-radius",
+                  "Radius of wire");
    args.AddOption(&h_num, "-hn", "--h-num",
                   "Number of elements horizontally.");
    args.AddOption(&order, "-o", "--order",
@@ -94,6 +118,8 @@ int main(int argc, char *argv[])
                   "Center, Inner Radius, Outer Radius, and Permeability of Magnetic Shell");
    args.AddOption(&cr_params_, "-cr", "--current-ring-params",
                   "Axis End Points, Inner Radius, Outer Radius and Total Current of Annulus");
+   args.AddOption(&b_uniform_, "-ubbc", "--uniform-b-bc",
+                  "Specify if the three components of the constant magnetic flux density");
    args.AddOption(&bm_params_, "-bm", "--bar-magnet-params",
                   "Axis End Points, Radius, and Magnetic Field of Cylindrical Magnet");
    args.AddOption(&ha_params_, "-ha", "--halbach-array-params",
@@ -122,62 +148,25 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root())
    {
-      args.PrintOptions(cout);
+      //args.PrintOptions(cout);
    }
 
-   // Generate structured unit square mesh
-   int v = 21;
-   int Nelem = h_num*(v-1)*2; //h*w*2 triangles
-   int Nvert = (h_num+1)*(v);
+   // 3. Read the SCOREC Mesh.
+   PCU_Comm_Init();
+#ifdef MFEM_USE_SIMMETRIX
+   Sim_readLicenseFile(0);
+   gmi_sim_start();
+   gmi_register_sim();
+#endif
+   gmi_register_mesh();
 
-   Mesh *mesh = new Mesh(2, Nvert, Nelem);
+   apf::Mesh2* pumi_mesh;
+   pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
+   Mesh *mesh = new PumiMesh(pumi_mesh, 1, 1);
+   int dim = mesh->Dimension();
 
-   double tri_v[Nvert][3];
-   int tri_e[Nelem][3];
-
-   for (int j = 0; j < h_num+1; j++)
    {
-      for (int k = 0; k < v; k++)
-      {
-         tri_v[j*v + k][0] = (double)j / ((double)h_num);
-         tri_v[j*v + k][1] = (double)k / (v-1);
-         tri_v[j*v + k][2] = 0;
-      }
-   }
-
-   int count = 0;
-   for (int j = 0; j < h_num; j++)
-   {
-      for (int k = 0; k < (v-1); k++)
-      {
-         tri_e[j*(v-1)*2 + 2*k][0] = j*(v) + k;
-         tri_e[j*(v-1)*2 + 2*k][1] = j*(v) + k + 1;
-         tri_e[j*(v-1)*2 + 2*k][2] = (j+1)*(v) + k;
-
-         tri_e[j*(v-1)*2 + 2*k+1][0] = j*(v) + k + 1;
-         tri_e[j*(v-1)*2 + 2*k+1][1] = (j+1)*(v) + k;
-         tri_e[j*(v-1)*2 + 2*k+1][2] = (j+1)*(v) + k + 1;
-         count = count + 1;
-      }
-   }
-
-   for (int j = 0; j < Nvert; j++)
-   {
-      mesh->AddVertex(tri_v[j]);
-   }
-   for (int j = 0; j < Nelem; j++)
-   {
-      int attribute = j + 1;
-      mesh->AddTriangle(tri_e[j], attribute);
-   }
-
-   mesh->FinalizeTriMesh(1, 1, true);
-
-   // ofstream mesh_ofs("test.mesh");
-   // mesh_ofs.precision(8);
-   // mesh->Print(mesh_ofs);
-   {
-      ofstream omesh_ofs("test_mesh.vtk");
+      ofstream omesh_ofs("wire_test.vtk");
       omesh_ofs.precision(8);
       mesh->PrintVTK(omesh_ofs, 0);
    }
@@ -186,7 +175,10 @@ int main(int argc, char *argv[])
    if (mpi.Root())
    {
       cout << "Starting initialization." << endl;
+     
    }
+
+   
 
 
 
@@ -205,6 +197,8 @@ int main(int argc, char *argv[])
    // parallel mesh is defined, the serial mesh can be deleted.
    ParMesh pmesh(MPI_COMM_WORLD, *mesh);
    delete mesh;
+   
+   cout << pmesh.bdr_attributes.Max()<<"\n";
 
    // Refine this mesh in parallel to increase the resolution.
    // int par_ref_levels = parallel_ref_levels;
@@ -256,115 +250,47 @@ int main(int argc, char *argv[])
    }
    if (mpi.Root()) { cout << "Initialization done." << endl; }
 
-   // The main AMR loop. In each iteration we solve the problem on the current
-   // mesh, visualize the solution, estimate the error on all elements, refine
-   // the worst elements and update all objects to work with the new mesh. We
-   // refine until the maximum number of dofs in the Nedelec finite element
-   // space reaches 10 million.
-   // const int max_dofs = 10000000;
-   // for (int it = 1; it <= maxit; it++)
-   // {
-   //    if (mpi.Root())
-   //    {
-   //       cout << "\nAMR Iteration " << it << endl;
-   //    }
 
    //    // Display the current number of DoFs in each finite element space
    Tesla.PrintSizes();
 
       // Assemble all forms
    Tesla.Assemble();
-   cout <<"hello \n";
       // Solve the system and compute any auxiliary fields
    Tesla.Solve();
 
       // Determine the current size of the linear system
    int prob_size = Tesla.GetProblemSize();
 
-      // // Write fields to disk for VisIt
-      // if ( visit )
-      // {
-      //    Tesla.WriteVisItFields(it);
-      // }
-
-      // // Send the solution by socket to a GLVis server.
-      // if (visualization)
-      // {
-      //    Tesla.DisplayToGLVis();
-      // }
-
-      // if (mpi.Root())
-      // {
-      //    cout << "AMR iteration " << it << " complete." << endl;
-      // }
-
-      // // Check stopping criteria
-      // if (prob_size > max_dofs)
-      // {
-      //    if (mpi.Root())
-      //    {
-      //       cout << "Reached maximum number of dofs, exiting..." << endl;
-      //    }
-      //    break;
-      // }
-      // if ( it == maxit )
-      // {
-      //    break;
-      // }
-
-      // // Wait for user input. Ask every 10th iteration.
-      // char c = 'c';
-      // if (mpi.Root() && (it % 10 == 0))
-      // {
-      //    cout << "press (q)uit or (c)ontinue --> " << flush;
-      //    cin >> c;
-      // }
-      // MPI_Bcast(&c, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
-
-      // if (c != 'c')
-      // {
-      //    break;
-      // }
+   
 
       // Estimate element errors using the Zienkiewicz-Zhu error estimator.
-   Vector errors(pmesh.GetNE());
-   Tesla.GetErrorEstimates(errors);
+   // Vector errors(pmesh.GetNE());
+   // Tesla.GetErrorEstimates(errors);
 
-   double local_max_err = errors.Max();
-   double global_max_err;
-   MPI_Allreduce(&local_max_err, &global_max_err, 1,
-                 MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+   // double local_max_err = errors.Max();
+   // double global_max_err;
+   // MPI_Allreduce(&local_max_err, &global_max_err, 1,
+   //               MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
 
-      // // Refine the elements whose error is larger than a fraction of the
-      // // maximum element error.
-      // const double frac = 0.5;
-      // double threshold = frac * global_max_err;
-      // if (mpi.Root()) { cout << "Refining ..." << endl; }
-      // pmesh.RefineByError(errors, threshold);
 
-      // // Update the magnetostatic solver to reflect the new state of the mesh.
-      // Tesla.Update();
+   
+      ofstream mesh_ofs("wire_sol.vtk");
+      mesh_ofs.precision(8);
+      pmesh.PrintVTK(mesh_ofs, 0);
+      ofstream sol_ofs("sol.gf");
+      sol_ofs.precision(8);
+      ParGridFunction x = Tesla.GetVectorPotential();
+      x.SaveVTK(mesh_ofs, "sol", 0);
+   
 
-      // if (pmesh.Nonconforming() && mpi.WorldSize() > 1)
-      // {
-      //    if (mpi.Root()) { cout << "Rebalancing ..." << endl; }
-      //    pmesh.Rebalance();
+   VectorCoefficient * sol_coeff;
+   sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
+   error = x.ComputeL2Error(*sol_coeff);
 
-      //    // Update again after rebalancing
-      //    Tesla.Update();
-   //    // }
-   // {
-   //    ofstream mesh_ofs("displaced.vtk");
-   //    mesh_ofs.precision(8);
-   //    mesh->PrintVTK(mesh_ofs, 0);
-   //    ofstream sol_ofs("sol.gf");
-   //    sol_ofs.precision(8);
-   //    x.SaveVTK(mesh_ofs, "sol", 0);
-   // }
-
+   cout<<"L2 Error: "<<error<<"\n";
 
    delete muInvCoef;
-
    return 0;
 }
 
@@ -398,10 +324,10 @@ SetupInvPermeabilityCoefficient()
 //CHANGING FOR LEFT AND RIGHT HALF OF 2D DOMAIN
 double magnetic_shell(const Vector &x)
 {
-
-   if ( x(0) <= .5)
+   r = sqrt(x(0)*x(0) + x(1)*x(1));
+   if ( r <= r_param)
    {
-      return mu0_*ms_params_(x.Size()+2);
+      return mu0_*ms_params_(0);
    }
    return mu0_;
 }
@@ -413,54 +339,8 @@ void current_ring(const Vector &x, Vector &j)
 
    j.SetSize(x.Size());
    j = 0.0;
-
-   // Vector  a(x.Size());  // Normalized Axis vector
-   // Vector xu(x.Size());  // x vector relative to the axis end-point
-   // Vector ju(x.Size());  // Unit vector in direction of current
-
-   // xu = x;
-
-   // for (int i=0; i<x.Size(); i++)
-   // {
-   //    xu[i] -= cr_params_[i];
-   //    a[i]   = cr_params_[x.Size()+i] - cr_params_[i];
-   // }
-
-   // double h = a.Norml2();
-
-   // if ( h == 0.0 )
-   // {
-   //    return;
-   // }
-
-   // double ra = cr_params_[2*x.Size()+0];
-   // double rb = cr_params_[2*x.Size()+1];
-   // if ( ra > rb )
-   // {
-   //    double rc = ra;
-   //    ra = rb;
-   //    rb = rc;
-   // }
-   // double xa = xu*a;
-
-   // if ( h > 0.0 )
-   // {
-   //    xu.Add(-xa/(h*h),a);
-   // }
-
-   // double xp = xu.Norml2();
-
-   // if ( xa >= 0.0 && xa <= h*h && xp >= ra && xp <= rb )
-   // {
-   //    ju(0) = a(1) * xu(2) - a(2) * xu(1);
-   //    ju(1) = a(2) * xu(0) - a(0) * xu(2);
-   //    ju(2) = a(0) * xu(1) - a(1) * xu(0);
-   //    ju /= h;
-
-   //    j.Add(cr_params_[2*x.Size()+2]/(h*(rb-ra)),ju);
-   // }
-
-   if (x(0) <= .5)
+   r = sqrt(x(0)*x(0) + x(1)*x(1));
+   if ( r <= r_param)
    {
       j(2) = -cr_params_(0);
    }
@@ -496,7 +376,7 @@ void bar_magnet(const Vector &x, Vector &m)
       return;
    }
 
-   double  r = bm_params_[2*x.Size()];
+   double  ree = bm_params_[2*x.Size()];
    double xa = xu*a;
 
    if ( h > 0.0 )
@@ -506,7 +386,7 @@ void bar_magnet(const Vector &x, Vector &m)
 
    double xp = xu.Norml2();
 
-   if ( xa >= 0.0 && xa <= h*h && xp <= r )
+   if ( xa >= 0.0 && xa <= h*h && xp <= ree )
    {
       m.Add(bm_params_[2*x.Size()+1]/h,a);
    }
@@ -538,14 +418,14 @@ void halbach_array(const Vector &x, Vector &m)
    m[(ri + 1 + (i % 2)) % 3] = pow(-1.0,i/2);
 }
 
-// To produce a uniform magnetic flux the vector potential can be set
-// to ( By z, Bz x, Bx y).
+// set tangential vector potential components to zero
 void a_bc_uniform(const Vector & x, Vector & a)
 {
    a.SetSize(3);
-   a(0) = b_uniform_(1) * x(2);
-   a(1) = b_uniform_(2) * x(0);
-   a(2) = b_uniform_(0) * x(1);
+   a(0) = 0;
+   a(1) = 0;
+   a(2) = 0;
+   //a(2) = b_uniform_(0) * x(1);
 }
 
 // To produce a uniform magnetic field the scalar potential can be set
@@ -553,4 +433,20 @@ void a_bc_uniform(const Vector & x, Vector & a)
 double phi_m_bc_uniform(const Vector &x)
 {
    return -x(x.Size()-1);
+}
+
+void sol_analytic(const Vector &x, Vector & a)
+{
+   a.SetSize(3);
+   a(0) = 0;
+   a(1) = 0;
+   r = sqrt(x(0)*x(0) + x(1)*x(1));
+   if ( r <= r_param)
+   {
+      a(2) = -mu0_*cr_params_(0)*(r*r - r_param*r_param)/(4*pi*r_param*r_param);
+   }
+   else 
+   {
+      a(2) = -mu0_*cr_params_(0)*log(r/r_param)/(2*pi);
+   }
 }

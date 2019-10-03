@@ -48,7 +48,7 @@ all: $(MINIAPPS)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ $@.o $ tesla_solver.o $(COMMON_O) $(MFEM_LIBS)
 
 # Rules for compiling miniapp dependencies
-$(COMMON_O) $(tesla_solver.o,$(MINIAPPS)): \
+$(COMMON_O) $(addsuffix _solver.o,$(MINIAPPS)): \
 %.o: $(SRC)%.cpp $(SRC)%.hpp $(CONFIG_MK)
 	$(MFEM_CXX) $(MFEM_FLAGS) -c $(<) -o $(@)
 
