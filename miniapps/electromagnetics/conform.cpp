@@ -46,16 +46,19 @@ int h_num;
 static Vector pw_mu_(0);
 
 double error;
+double errorb;
 const double pi = 3.141592653589; 
 double r;
 double magnetic_shell(const Vector &);
 double magnetic_shell_inv(const Vector & x) { return 1.0/magnetic_shell(x); }
-double r_param = .001;
+double r_param = .01;
 // Current Density Function
 static Vector cr_params_(0);  // magnitude of downward current 
 
 void current_ring(const Vector &, Vector &);
 void sol_analytic(const Vector &, Vector &);
+void sol_b_analytic(const Vector &, Vector &);
+
 // Magnetization
 static Vector bm_params_(0);  // Axis Start, Axis End, Bar Radius,
 //                               and Magnetic Field Magnitude
@@ -85,11 +88,11 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    // 2. Parse command-line options.
-   const char *mesh_file = "../../../cad/wire.smb";
+   const char *mesh_file = "../../../cad/wire_nc-case1.smb";
    #ifdef MFEM_USE_SIMMETRIX
    const char *model_file = "../../../cad/wire_nc.x_t";
    #else
-   const char *model_file = "../../../cad/wire_nc.dmg";
+   const char *model_file = "../../../cad/wire_c.dmg";
    #endif
    int order = 1;
    int maxit = 100;
@@ -281,14 +284,23 @@ int main(int argc, char *argv[])
       ofstream sol_ofs("sol.gf");
       sol_ofs.precision(8);
       ParGridFunction x = Tesla.GetVectorPotential();
+      ParGridFunction xb = Tesla.GetMagneticField();
       x.SaveVTK(mesh_ofs, "sol", 0);
+      xb.SaveVTK(mesh_ofs, "solb", 0);
+
    
 
    VectorCoefficient * sol_coeff;
+   VectorCoefficient * sol_b_coeff;
    sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
-   error = x.ComputeL2Error(*sol_coeff);
+   sol_b_coeff = new VectorFunctionCoefficient(3, *sol_b_analytic);
 
-   cout<<"L2 Error: "<<error<<"\n";
+   error = x.ComputeL2Error(*sol_coeff);
+   errorb = xb.ComputeL2Error(*sol_b_coeff);
+
+   cout<<"A L2 Error: "<<error<<"\n";
+
+   cout<<"B L2 Error: "<<errorb<<"\n";
 
    delete muInvCoef;
    return 0;
@@ -448,5 +460,22 @@ void sol_analytic(const Vector &x, Vector & a)
    else 
    {
       a(2) = -mu0_*cr_params_(0)*log(r/r_param)/(2*pi);
+   }
+}
+
+void sol_b_analytic(const Vector &x, Vector & b)
+{
+   b.SetSize(3);
+   b(2) = 0;
+
+   if ( r <= r_param)
+   {
+      b(0) = mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param))*sin(mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param)));
+      b(1) = -mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param))*cos(mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param)));
+   }
+   else 
+   {
+      b(0) = mu0_*cr_params_(0)/(2*pi*(r*r))*sin(mu0_*cr_params_(0)/(2*pi*(r*r)));
+      b(1) = -mu0_*cr_params_(0)/(2*pi*(r*r))*cos(mu0_*cr_params_(0)/(2*pi*(r*r)));
    }
 }

@@ -351,10 +351,13 @@ TeslaSolver::Solve()
 
    // Apply Dirichlet BCs to matrix and right hand side and otherwise
    // prepare the linear system
+   HCurlFESpace_->GetEssentialTrueDofs(ess_bdr_, ess_bdr_tdofs_);
+
    HypreParMatrix CurlMuInvCurl;
    HypreParVector A(HCurlFESpace_);
    HypreParVector RHS(HCurlFESpace_);
 
+   
    curlMuInvCurl_->FormLinearSystem(ess_bdr_tdofs_, *a_, *jd_, CurlMuInvCurl,
                                     A, RHS);
 
@@ -364,9 +367,9 @@ TeslaSolver::Solve()
    ams.SetSingularProblem();
 
    HyprePCG pcg (CurlMuInvCurl);
-   pcg.SetTol(1e-12);
-   pcg.SetMaxIter(100);
-   pcg.SetPrintLevel(2);
+   pcg.SetTol(1e-14);
+   pcg.SetMaxIter(1000);
+   pcg.SetPrintLevel(1);
    pcg.SetPreconditioner(ams);
    pcg.Mult(RHS, A);
 
@@ -397,8 +400,8 @@ TeslaSolver::Solve()
 
    HyprePCG pcgM(MassHCurl);
    pcgM.SetTol(1e-12);
-   pcgM.SetMaxIter(500);
-   pcgM.SetPrintLevel(0);
+   pcgM.SetMaxIter(1000);
+   pcgM.SetPrintLevel(1);
    HypreDiagScale diagM;
    pcgM.SetPreconditioner(diagM);
    pcgM.Mult(BD, H);

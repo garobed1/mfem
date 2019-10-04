@@ -67,6 +67,8 @@ public:
 
    const ParGridFunction & GetVectorPotential() { return *a_; }
 
+   const ParGridFunction & GetMagneticField() {return *b_;}
+
 private:
 
    int myid_;
