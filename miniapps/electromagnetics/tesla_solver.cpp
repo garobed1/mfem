@@ -46,6 +46,7 @@ TeslaSolver::TeslaSolver(ParMesh & pmesh, int order,
      curl_(NULL),
      a_(NULL),
      b_(NULL),
+     sol_(NULL),
      h_(NULL),
      jr_(NULL),
      j_(NULL),
@@ -142,6 +143,7 @@ TeslaSolver::TeslaSolver(ParMesh & pmesh, int order,
    // Build grid functions
    a_  = new ParGridFunction(HCurlFESpace_);
    b_  = new ParGridFunction(HDivFESpace_);
+   sol_ = new ParGridFunction(HDivFESpace_);
    h_  = new ParGridFunction(HCurlFESpace_);
    bd_ = new ParGridFunction(HCurlFESpace_);
    jd_ = new ParGridFunction(HCurlFESpace_);
@@ -188,6 +190,7 @@ TeslaSolver::~TeslaSolver()
 
    delete a_;
    delete b_;
+   delete sol_;
    delete h_;
    delete jr_;
    delete j_;
@@ -367,7 +370,7 @@ TeslaSolver::Solve()
    ams.SetSingularProblem();
 
    HyprePCG pcg (CurlMuInvCurl);
-   pcg.SetTol(1e-14);
+   pcg.SetTol(1e-15);
    pcg.SetMaxIter(1000);
    pcg.SetPrintLevel(1);
    pcg.SetPreconditioner(ams);
@@ -399,7 +402,7 @@ TeslaSolver::Solve()
    hCurlMass_->FormLinearSystem(dbc_dofs_h, *h_, *bd_, MassHCurl, H, BD);
 
    HyprePCG pcgM(MassHCurl);
-   pcgM.SetTol(1e-12);
+   pcgM.SetTol(1e-15);
    pcgM.SetMaxIter(1000);
    pcgM.SetPrintLevel(1);
    HypreDiagScale diagM;

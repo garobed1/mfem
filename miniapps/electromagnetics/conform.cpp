@@ -4,7 +4,7 @@
 //
 // This miniapp solves a simple 2D magnetostatic problem.
 //
-//                     Curl 1/mu Curl A = J + Curl mu0/mu M
+//                     Curl 1/mu Curl A = J + Curl mu0_/mu M
 //
 // The permeability function is piecewise, left half of a square domain a 
 // given permeability and current density, and right half free space
@@ -40,7 +40,6 @@ using namespace mfem::electromagnetics;
 Coefficient * SetupInvPermeabilityCoefficient();
 
 static Vector ms_params_(0);  // Just Permeability
-
 int h_num;
 
 static Vector pw_mu_(0);
@@ -49,9 +48,11 @@ double error;
 double errorb;
 const double pi = 3.141592653589; 
 double r;
+double phi;
+double I;
 double magnetic_shell(const Vector &);
 double magnetic_shell_inv(const Vector & x) { return 1.0/magnetic_shell(x); }
-double r_param = .01;
+double r_param = .02;
 // Current Density Function
 static Vector cr_params_(0);  // magnitude of downward current 
 
@@ -109,6 +110,8 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&mesh_file, "-m", "--mesh",
                   "Mesh file to use.");
+   args.AddOption(&model_file, "-mdl", "--model",
+                  "Model file to use");
    args.AddOption(&r_param, "-Rp", "--wire-radius",
                   "Radius of wire");
    args.AddOption(&h_num, "-hn", "--h-num",
@@ -210,6 +213,7 @@ int main(int argc, char *argv[])
    //    pmesh.UniformRefinement();
    // }
    // Make sure tet-only meshes are marked for local refinement.
+   pmesh.RemoveInternalBoundaries();
    pmesh.Finalize(true);
 
    // If values for Voltage BCs were not set issue a warning and exit
@@ -285,6 +289,8 @@ int main(int argc, char *argv[])
       sol_ofs.precision(8);
       ParGridFunction x = Tesla.GetVectorPotential();
       ParGridFunction xb = Tesla.GetMagneticField();
+      ParGridFunction xan = Tesla.GetField();
+      ParGridFunction xban = Tesla.GetField();
       x.SaveVTK(mesh_ofs, "sol", 0);
       xb.SaveVTK(mesh_ofs, "solb", 0);
 
@@ -294,9 +300,13 @@ int main(int argc, char *argv[])
    VectorCoefficient * sol_b_coeff;
    sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
    sol_b_coeff = new VectorFunctionCoefficient(3, *sol_b_analytic);
-
+   xan.ProjectCoefficient(*sol_coeff);
+   xban.ProjectCoefficient(*sol_b_coeff);
    error = x.ComputeL2Error(*sol_coeff);
    errorb = xb.ComputeL2Error(*sol_b_coeff);
+   xan.SaveVTK(mesh_ofs, "analytic", 0);
+   xban.SaveVTK(mesh_ofs, "analyticb", 0);
+
 
    cout<<"A L2 Error: "<<error<<"\n";
 
@@ -354,7 +364,7 @@ void current_ring(const Vector &x, Vector &j)
    r = sqrt(x(0)*x(0) + x(1)*x(1));
    if ( r <= r_param)
    {
-      j(2) = -cr_params_(0);
+      j(2) = -cr_params_(0)/(pi*r_param*r_param);
    }
    else 
    {
@@ -453,13 +463,16 @@ void sol_analytic(const Vector &x, Vector & a)
    a(0) = 0;
    a(1) = 0;
    r = sqrt(x(0)*x(0) + x(1)*x(1));
+   I = cr_params_(0);
    if ( r <= r_param)
    {
-      a(2) = -mu0_*cr_params_(0)*(r*r - r_param*r_param)/(4*pi*r_param*r_param);
+      a(2) = mu0_*I*(r*r - r_param*r_param)/(4*pi*r_param*r_param) - 
+      mu0_*I*log(0.05/r_param)/(2*pi); 
    }
    else 
    {
-      a(2) = -mu0_*cr_params_(0)*log(r/r_param)/(2*pi);
+      a(2) = mu0_*I*log(r/r_param)/(2*pi) - 
+      mu0_*I*log(0.05/r_param)/(2*pi);
    }
 }
 
@@ -468,14 +481,17 @@ void sol_b_analytic(const Vector &x, Vector & b)
    b.SetSize(3);
    b(2) = 0;
 
+   r = sqrt(x(0)*x(0) + x(1)*x(1));
+   phi = atan2(x(1),x(0));
+   I = cr_params_(0);
    if ( r <= r_param)
    {
-      b(0) = mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param))*sin(mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param)));
-      b(1) = -mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param))*cos(mu0_*cr_params_(0)*r/(2*pi*(r_param*r_param)));
+      b(0) = mu0_*I*r/(2*pi*(r_param*r_param))*sin(phi);
+      b(1) = -mu0_*I*r/(2*pi*(r_param*r_param))*cos(phi);
    }
    else 
    {
-      b(0) = mu0_*cr_params_(0)/(2*pi*(r*r))*sin(mu0_*cr_params_(0)/(2*pi*(r*r)));
-      b(1) = -mu0_*cr_params_(0)/(2*pi*(r*r))*cos(mu0_*cr_params_(0)/(2*pi*(r*r)));
+      b(0) = mu0_*I/(2*pi*(r))*sin(phi);
+      b(1) = -mu0_*I/(2*pi*(r))*cos(phi);
    }
 }
