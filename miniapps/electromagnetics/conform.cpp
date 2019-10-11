@@ -6,11 +6,6 @@
 //
 //                     Curl 1/mu Curl A = J + Curl mu0_/mu M
 //
-// The permeability function is piecewise, left half of a square domain a 
-// given permeability and current density, and right half free space
-//
-// boundary conditions periodic from top to bottom
-//
 // We discretize the vector potential with H(Curl) finite elements. The magnetic
 // flux B is discretized with H(Div) finite elements.
 //
@@ -21,16 +16,16 @@
 #include <fstream>
 #include <iostream>
 
-#ifdef MFEM_USE_SIMMETRIX
-#include <SimUtil.h>
-#include <gmi_sim.h>
-#endif
-#include <apfMDS.h>
-#include <gmi_null.h>
-#include <PCU.h>
-#include <apfConvert.h>
-#include <gmi_mesh.h>
-#include <crv.h>
+// #ifdef MFEM_USE_SIMMETRIX
+// #include <SimUtil.h>
+// #include <gmi_sim.h>
+// #endif
+// #include <apfMDS.h>
+// #include <gmi_null.h>
+// #include <PCU.h>
+// #include <apfConvert.h>
+// #include <gmi_mesh.h>
+// #include <crv.h>
 
 using namespace std;
 using namespace mfem;
@@ -48,6 +43,7 @@ double error;
 double errorb;
 const double pi = 3.141592653589; 
 double r;
+double y;
 double phi;
 double I;
 double magnetic_shell(const Vector &);
@@ -89,12 +85,12 @@ int main(int argc, char *argv[])
 
    // Parse command-line options.
    // 2. Parse command-line options.
-   const char *mesh_file = "../../../cad/wire_nc-case1.smb";
-   #ifdef MFEM_USE_SIMMETRIX
-   const char *model_file = "../../../cad/wire_nc.x_t";
-   #else
-   const char *model_file = "../../../cad/wire_c.dmg";
-   #endif
+   // const char *mesh_file = "../../../cad/wire_nc-case1.smb";
+   // #ifdef MFEM_USE_SIMMETRIX
+   // const char *model_file = "../../../cad/wire_nc.x_t";
+   // #else
+   // const char *model_file = "../../../cad/wire_c.dmg";
+   // #endif
    int order = 1;
    int maxit = 100;
    int serial_ref_levels = 0;
@@ -108,10 +104,10 @@ int main(int argc, char *argv[])
    Vector vbcv;
 
    OptionsParser args(argc, argv);
-   args.AddOption(&mesh_file, "-m", "--mesh",
-                  "Mesh file to use.");
-   args.AddOption(&model_file, "-mdl", "--model",
-                  "Model file to use");
+   // args.AddOption(&mesh_file, "-m", "--mesh",
+   //                "Mesh file to use.");
+   // args.AddOption(&model_file, "-mdl", "--model",
+   //                "Model file to use");
    args.AddOption(&r_param, "-Rp", "--wire-radius",
                   "Radius of wire");
    args.AddOption(&h_num, "-hn", "--h-num",
@@ -157,22 +153,23 @@ int main(int argc, char *argv[])
       //args.PrintOptions(cout);
    }
 
-   // 3. Read the SCOREC Mesh.
-   PCU_Comm_Init();
-#ifdef MFEM_USE_SIMMETRIX
-   Sim_readLicenseFile(0);
-   gmi_sim_start();
-   gmi_register_sim();
-#endif
-   gmi_register_mesh();
+//    // 3. Read the SCOREC Mesh.
+//    PCU_Comm_Init();
+// #ifdef MFEM_USE_SIMMETRIX
+//    Sim_readLicenseFile(0);
+//    gmi_sim_start();
+//    gmi_register_sim();
+// #endif
+//    gmi_register_mesh();
 
-   apf::Mesh2* pumi_mesh;
-   pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
-   Mesh *mesh = new PumiMesh(pumi_mesh, 1, 1);
+//    apf::Mesh2* pumi_mesh;
+//    pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
+   mfem::Element::Type tet = Element::TETRAHEDRON;
+   Mesh *mesh = new Mesh(20, 21, 1, tet, false, 1, 1, 0.1);
    int dim = mesh->Dimension();
 
    {
-      ofstream omesh_ofs("wire_test.vtk");
+      ofstream omesh_ofs("square_test.vtk");
       omesh_ofs.precision(8);
       mesh->PrintVTK(omesh_ofs, 0);
    }
@@ -282,7 +279,7 @@ int main(int argc, char *argv[])
 
 
    
-      ofstream mesh_ofs("wire_sol.vtk");
+      ofstream mesh_ofs("square_sol.vtk");
       mesh_ofs.precision(8);
       pmesh.PrintVTK(mesh_ofs, 0);
       ofstream sol_ofs("sol.gf");
@@ -311,7 +308,6 @@ int main(int argc, char *argv[])
    cout<<"A L2 Error: "<<error<<"\n";
 
    cout<<"B L2 Error: "<<errorb<<"\n";
-
    delete muInvCoef;
    return 0;
 }
@@ -339,36 +335,34 @@ SetupInvPermeabilityCoefficient()
    return coef;
 }
 
-// A spherical shell with constant permeability.  The sphere has inner
-// and outer radii, center, and relative permeability specified on the
-// command line and stored in ms_params_.
 
-//CHANGING FOR LEFT AND RIGHT HALF OF 2D DOMAIN
 double magnetic_shell(const Vector &x)
 {
-   r = sqrt(x(0)*x(0) + x(1)*x(1));
-   if ( r <= r_param)
+
+   if ( x(1) <= .5)
    {
-      return mu0_*ms_params_(0);
+      return ms_params_(0);
    }
-   return mu0_;
+   else
+   {
+      return ms_params_(1);
+   }
 }
 
-// Left half is conductor with some current density
+//assign current density
 void current_ring(const Vector &x, Vector &j)
 {
-   //MFEM_ASSERT(x.Size() == 3, "current_ring source requires 3D space.");
-
-   j.SetSize(x.Size());
+   j.SetSize(3);
    j = 0.0;
-   r = sqrt(x(0)*x(0) + x(1)*x(1));
-   if ( r <= r_param)
+   y = x(1) - .5;
+   if ( x(1) < .5)
    {
-      j(2) = -cr_params_(0)/(pi*r_param*r_param);
+      j(2) = -(1/ms_params_(0))*exp(y);
    }
-   else 
+   if ( x(1) > .5)
    {
-      j = 0.0;
+      j(2) = -(1/ms_params_(1))*exp(-y);
+
    }
 }
 
@@ -440,13 +434,20 @@ void halbach_array(const Vector &x, Vector &m)
    m[(ri + 1 + (i % 2)) % 3] = pow(-1.0,i/2);
 }
 
-// set tangential vector potential components to zero
+// set tangential vector potential components
 void a_bc_uniform(const Vector & x, Vector & a)
 {
    a.SetSize(3);
-   a(0) = 0;
-   a(1) = 0;
-   a(2) = 0;
+   a = 0.0;
+   y = x(1) - .5;
+   if ( x(1) <= .5)
+   {
+      a(2) = exp(y); 
+   }
+   else 
+   {
+      a(2) = exp(-y);
+   }
    //a(2) = b_uniform_(0) * x(1);
 }
 
@@ -460,38 +461,29 @@ double phi_m_bc_uniform(const Vector &x)
 void sol_analytic(const Vector &x, Vector & a)
 {
    a.SetSize(3);
-   a(0) = 0;
-   a(1) = 0;
-   r = sqrt(x(0)*x(0) + x(1)*x(1));
-   I = cr_params_(0);
-   if ( r <= r_param)
+   a = 0.0;
+   y = x(1) - .5;
+   if ( x(1) <= .5)
    {
-      a(2) = mu0_*I*(r*r - r_param*r_param)/(4*pi*r_param*r_param) - 
-      mu0_*I*log(0.05/r_param)/(2*pi); 
+      a(2) = exp(y); 
    }
    else 
    {
-      a(2) = mu0_*I*log(r/r_param)/(2*pi) - 
-      mu0_*I*log(0.05/r_param)/(2*pi);
+      a(2) = exp(-y);
    }
 }
 
 void sol_b_analytic(const Vector &x, Vector & b)
 {
    b.SetSize(3);
-   b(2) = 0;
-
-   r = sqrt(x(0)*x(0) + x(1)*x(1));
-   phi = atan2(x(1),x(0));
-   I = cr_params_(0);
-   if ( r <= r_param)
+   b = 0.0;
+   y = x(1) - .5;
+   if ( x(1) <= .5)
    {
-      b(0) = mu0_*I*r/(2*pi*(r_param*r_param))*sin(phi);
-      b(1) = -mu0_*I*r/(2*pi*(r_param*r_param))*cos(phi);
+      b(0) = (1/ms_params_(0))*exp(y);
    }
    else 
    {
-      b(0) = mu0_*I/(2*pi*(r))*sin(phi);
-      b(1) = -mu0_*I/(2*pi*(r))*cos(phi);
+      b(0) = (-1/ms_params_(1))*exp(-y);
    }
 }

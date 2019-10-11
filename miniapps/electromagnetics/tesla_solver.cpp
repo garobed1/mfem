@@ -317,8 +317,9 @@ TeslaSolver::Solve()
    if (myid_ == 0) { cout << "Running solver ... " << endl; }
 
    // Initialize the magnetic vector potential with its boundary conditions
-   *a_ = 0.0;
+   *a_->ProjectCoefficient(*aBCCoef_);
 
+   
    // Apply surface currents if available
    if ( k_ )
    {

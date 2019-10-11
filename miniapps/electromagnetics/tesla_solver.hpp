@@ -69,6 +69,9 @@ public:
 
    const ParGridFunction & GetMagneticField() {return *b_;}
 
+   const ParGridFunction & GetField() {return *sol_;}
+
+
 private:
 
    int myid_;
@@ -93,6 +96,7 @@ private:
 
    ParGridFunction * a_;  // Vector Potential (HCurl)
    ParGridFunction * b_;  // Magnetic Flux (HDiv)
+   ParGridFunction * sol_;
    ParGridFunction * h_;  // Magnetic Field (HCurl)
    ParGridFunction * jr_; // Raw Volumetric Current Density (HCurl)
    ParGridFunction * j_;  // Volumetric Current Density (HCurl)

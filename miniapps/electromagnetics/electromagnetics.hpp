@@ -9,7 +9,7 @@
 // terms of the GNU Lesser General Public License (as published by the Free
 // Software Foundation) version 2.1 dated February 1999.
 
-#ifndef MFEM_ELECTROMAGNETICS_HPP
+//#ifndef MFEM_ELECTROMAGNETICS_HPP
 #define MFEM_ELECTROMAGNETICS_HPP
 
 namespace mfem
@@ -30,4 +30,4 @@ static const double mu0_ = 4.0e-7*M_PI;
 
 } // namespace mfem
 
-#endif // MFEM_ELECTROMAGNETICS_HPP
+//#endif // MFEM_ELECTROMAGNETICS_HPP
