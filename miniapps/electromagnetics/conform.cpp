@@ -42,6 +42,9 @@ static Vector pw_mu_(0);
 double error;
 double errorb;
 const double pi = 3.141592653589; 
+int y_param;
+int x_param = 20;
+int z_param = 1;
 double r;
 double y;
 double phi;
@@ -108,6 +111,12 @@ int main(int argc, char *argv[])
    //                "Mesh file to use.");
    // args.AddOption(&model_file, "-mdl", "--model",
    //                "Model file to use");
+   args.AddOption(&x_param, "-x", "--num-x-elems",
+                  "Number of Elems in X direction");
+   args.AddOption(&y_param, "-y", "--num-y-elems",
+                  "Number of Elems in Y direction");
+   args.AddOption(&z_param, "-z", "--num-z-elems",
+                  "Number of Elems in Z direction");
    args.AddOption(&r_param, "-Rp", "--wire-radius",
                   "Radius of wire");
    args.AddOption(&h_num, "-hn", "--h-num",
@@ -165,7 +174,8 @@ int main(int argc, char *argv[])
 //    apf::Mesh2* pumi_mesh;
 //    pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
    mfem::Element::Type tet = Element::TETRAHEDRON;
-   Mesh *mesh = new Mesh(20, 21, 1, tet, false, 1, 1, 0.1);
+   Mesh *mesh = new Mesh(x_param, y_param, z_param, tet, false, 1, 1, 0.1);
+
    int dim = mesh->Dimension();
 
    {
@@ -173,7 +183,6 @@ int main(int argc, char *argv[])
       omesh_ofs.precision(8);
       mesh->PrintVTK(omesh_ofs, 0);
    }
-
 
    if (mpi.Root())
    {
@@ -211,7 +220,10 @@ int main(int argc, char *argv[])
    // }
    // Make sure tet-only meshes are marked for local refinement.
    pmesh.RemoveInternalBoundaries();
+
    pmesh.Finalize(true);
+   pmesh.ReorientTetMesh();
+
 
    // If values for Voltage BCs were not set issue a warning and exit
    if ( ( vbcs.Size() > 0 && kbcs.Size() == 0 ) ||
@@ -252,10 +264,27 @@ int main(int argc, char *argv[])
    {
       Tesla.RegisterVisItFields(visit_dc);
    }
+
    if (mpi.Root()) { cout << "Initialization done." << endl; }
 
+      ofstream mesh_ofs("square_sol.vtk");
+      mesh_ofs.precision(8);
+      pmesh.PrintVTK(mesh_ofs, 0);
+      ofstream sol_ofs("sol.gf");
+      sol_ofs.precision(8);
 
+      ParGridFunction xan = Tesla.GetField();
+      ParGridFunction xban = Tesla.GetField();
+
+   VectorCoefficient * sol_coeff;
+   VectorCoefficient * sol_b_coeff;
+   sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
+   sol_b_coeff = new VectorFunctionCoefficient(3, *sol_b_analytic);
+   xan.ProjectCoefficient(*sol_coeff);
+   xban.ProjectCoefficient(*sol_b_coeff);
    //    // Display the current number of DoFs in each finite element space
+
+#if 0
    Tesla.PrintSizes();
 
       // Assemble all forms
@@ -279,36 +308,33 @@ int main(int argc, char *argv[])
 
 
    
-      ofstream mesh_ofs("square_sol.vtk");
-      mesh_ofs.precision(8);
-      pmesh.PrintVTK(mesh_ofs, 0);
-      ofstream sol_ofs("sol.gf");
-      sol_ofs.precision(8);
+
       ParGridFunction x = Tesla.GetVectorPotential();
       ParGridFunction xb = Tesla.GetMagneticField();
-      ParGridFunction xan = Tesla.GetField();
-      ParGridFunction xban = Tesla.GetField();
       x.SaveVTK(mesh_ofs, "sol", 0);
       xb.SaveVTK(mesh_ofs, "solb", 0);
 
    
 
-   VectorCoefficient * sol_coeff;
-   VectorCoefficient * sol_b_coeff;
-   sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
-   sol_b_coeff = new VectorFunctionCoefficient(3, *sol_b_analytic);
-   xan.ProjectCoefficient(*sol_coeff);
-   xban.ProjectCoefficient(*sol_b_coeff);
+  
    error = x.ComputeL2Error(*sol_coeff);
    errorb = xb.ComputeL2Error(*sol_b_coeff);
-   xan.SaveVTK(mesh_ofs, "analytic", 0);
-   xban.SaveVTK(mesh_ofs, "analyticb", 0);
+
 
 
    cout<<"A L2 Error: "<<error<<"\n";
 
    cout<<"B L2 Error: "<<errorb<<"\n";
+#endif
+   xan.SaveVTK(mesh_ofs, "analytic", 0);
+   xban.SaveVTK(mesh_ofs, "analyticb", 0);
+
+   cout<<ms_params_(0)<<" "<<ms_params_(1)<<"\n";
    delete muInvCoef;
+
+   #ifdef MFEM_USE_STRUMPACK
+   cout<<"Strumpack a go\n";
+   #endif
    return 0;
 }
 
@@ -357,11 +383,11 @@ void current_ring(const Vector &x, Vector &j)
    y = x(1) - .5;
    if ( x(1) < .5)
    {
-      j(2) = -(1/ms_params_(0))*exp(y);
+      j(2) = -(1/ms_params_(0))*2;
    }
    if ( x(1) > .5)
    {
-      j(2) = -(1/ms_params_(1))*exp(-y);
+      j(2) = (1/ms_params_(1))*2;
 
    }
 }
@@ -442,11 +468,11 @@ void a_bc_uniform(const Vector & x, Vector & a)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      a(2) = exp(y); 
+      a(2) = y*y; 
    }
    else 
    {
-      a(2) = exp(-y);
+      a(2) = -y*y;
    }
    //a(2) = b_uniform_(0) * x(1);
 }
@@ -465,11 +491,11 @@ void sol_analytic(const Vector &x, Vector & a)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      a(2) = exp(y); 
+      a(2) = y*y; 
    }
    else 
    {
-      a(2) = exp(-y);
+      a(2) = -y*y;
    }
 }
 
@@ -480,10 +506,10 @@ void sol_b_analytic(const Vector &x, Vector & b)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      b(0) = (1/ms_params_(0))*exp(y);
+      b(0) = 2*y;
    }
    else 
    {
-      b(0) = (-1/ms_params_(1))*exp(-y);
+      b(0) = -2*y;
    }
 }
