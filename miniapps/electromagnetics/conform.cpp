@@ -389,64 +389,18 @@ double magnetic_shell(const Vector &x)
 //assign current density
 void current_ring(const Vector &x, Vector &J)
 {
-	// example of needed geometric parameters, this should be all you need
-	int n_s = 4; //number of slots
-	double zb = .25; //bottom of stator
-	double zt = .75; //top of stator
+   j.SetSize(3);
+   j = 0.0;
+   y = x(1) - .5;
+   if ( x(1) < .5)
+   {
+      j(2) = -(1/ms_params_(0))*2;
+   }
+   if ( x(1) > .5)
+   {
+      j(2) = (1/ms_params_(1))*2;
 
-
-	// compute r and theta from x and y
-	// double r = sqrt(x(0)*x(0) + x(1)*x(1)); (r not needed)
-	double tha = atan2(x(1), x(0));
-	double th;
-
-	double thw = 2*M_PI/n_s; //total angle of slot
-	int w; //current slot
-	J = 0.0;
-
-	// check which winding we're in
-	th = remquo(tha, thw, &w);
-
-	// check if we're in the stator body
-	if(x(2) >= zb && x(2) <= zt)
-	{
-		// check if we're in left or right half
-		if(th > 0)
-		{
-			J(2) = -1; // set to 1 for now, and direction depends on current direction
-		}
-		if(th < 0)
-		{
-			J(2) = 1;	
-		}
-	}
-	else  // outside of the stator body, check if above or below
-	{
-		// 'subtract' z position to 0 depending on if above or below
-		mfem::Vector rx(x);
-		if(x(2) > zt) 
-		{
-			rx(2) -= zt; 
-		}
-		if(x(2) < zb) 
-		{
-			rx(2) -= zb; 
-		}
-
-		// draw top rotation axis
-		mfem::Vector ax(3);
-		mfem::Vector Jr(3);
-		ax = 0.0;
-		ax(0) = cos(w*thw);
-		ax(1) = sin(w*thw);
-
-		// take x cross ax, normalize
-		Jr(0) = rx(1)*ax(2) - rx(2)*ax(1);
-		Jr(1) = rx(2)*ax(0) - rx(0)*ax(2);
-		Jr(2) = rx(0)*ax(1) - rx(1)*ax(0);
-		Jr /= Jr.Norml2();
-		J = Jr;
-	}
+   }
 }
 
 // A Cylindrical Rod of constant magnetization.  The cylinder has two
