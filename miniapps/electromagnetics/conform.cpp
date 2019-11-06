@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 //    apf::Mesh2* pumi_mesh;
 //    pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
    mfem::Element::Type tet = Element::TETRAHEDRON;
-   Mesh *mesh = new Mesh(x_param, y_param, z_param, tet, false, 1, 1, 0.1);
+   Mesh *mesh = new Mesh(x_param, y_param, z_param, tet, false, 1, 1, 1);
 
    int dim = mesh->Dimension();
 
@@ -275,13 +275,19 @@ int main(int argc, char *argv[])
 
       ParGridFunction xan = Tesla.GetField();
       ParGridFunction xban = Tesla.GetField();
+      ParGridFunction c = Tesla.GetField();
 
    VectorCoefficient * sol_coeff;
    VectorCoefficient * sol_b_coeff;
+   VectorCoefficient * current;
    sol_coeff = new VectorFunctionCoefficient(3, *sol_analytic);
    sol_b_coeff = new VectorFunctionCoefficient(3, *sol_b_analytic);
+   current = new VectorFunctionCoefficient(3, *current_ring);
    xan.ProjectCoefficient(*sol_coeff);
    xban.ProjectCoefficient(*sol_b_coeff);
+   c.ProjectCoefficient(*current);
+   c.SaveVTK(mesh_ofs, "current", 0);
+
    //    // Display the current number of DoFs in each finite element space
 
 #if 0
@@ -325,7 +331,7 @@ int main(int argc, char *argv[])
    cout<<"A L2 Error: "<<error<<"\n";
 
    cout<<"B L2 Error: "<<errorb<<"\n";
-#endif
+
    xan.SaveVTK(mesh_ofs, "analytic", 0);
    xban.SaveVTK(mesh_ofs, "analyticb", 0);
 
@@ -335,6 +341,7 @@ int main(int argc, char *argv[])
    #ifdef MFEM_USE_STRUMPACK
    cout<<"Strumpack a go\n";
    #endif
+#endif
    return 0;
 }
 
@@ -365,31 +372,81 @@ SetupInvPermeabilityCoefficient()
 double magnetic_shell(const Vector &x)
 {
 
-   if ( x(1) <= .5)
+   if ( x(1) < .5)
    {
       return ms_params_(0);
    }
-   else
+   if (x(1) == .5)
+   {
+      return (ms_params_(0)+ms_params_(1));
+   }
+   if (x(1) > .5)
    {
       return ms_params_(1);
    }
 }
 
 //assign current density
-void current_ring(const Vector &x, Vector &j)
+void current_ring(const Vector &x, Vector &J)
 {
-   j.SetSize(3);
-   j = 0.0;
-   y = x(1) - .5;
-   if ( x(1) < .5)
-   {
-      j(2) = -(1/ms_params_(0))*2;
-   }
-   if ( x(1) > .5)
-   {
-      j(2) = (1/ms_params_(1))*2;
+	// example of needed geometric parameters, this should be all you need
+	int n_s = 4; //number of slots
+	double zb = .25; //bottom of stator
+	double zt = .75; //top of stator
 
-   }
+
+	// compute r and theta from x and y
+	// double r = sqrt(x(0)*x(0) + x(1)*x(1)); (r not needed)
+	double tha = atan2(x(1), x(0));
+	double th;
+
+	double thw = 2*M_PI/n_s; //total angle of slot
+	int w; //current slot
+	J = 0.0;
+
+	// check which winding we're in
+	th = remquo(tha, thw, &w);
+
+	// check if we're in the stator body
+	if(x(2) >= zb && x(2) <= zt)
+	{
+		// check if we're in left or right half
+		if(th > 0)
+		{
+			J(2) = -1; // set to 1 for now, and direction depends on current direction
+		}
+		if(th < 0)
+		{
+			J(2) = 1;	
+		}
+	}
+	else  // outside of the stator body, check if above or below
+	{
+		// 'subtract' z position to 0 depending on if above or below
+		mfem::Vector rx(x);
+		if(x(2) > zt) 
+		{
+			rx(2) -= zt; 
+		}
+		if(x(2) < zb) 
+		{
+			rx(2) -= zb; 
+		}
+
+		// draw top rotation axis
+		mfem::Vector ax(3);
+		mfem::Vector Jr(3);
+		ax = 0.0;
+		ax(0) = cos(w*thw);
+		ax(1) = sin(w*thw);
+
+		// take x cross ax, normalize
+		Jr(0) = rx(1)*ax(2) - rx(2)*ax(1);
+		Jr(1) = rx(2)*ax(0) - rx(0)*ax(2);
+		Jr(2) = rx(0)*ax(1) - rx(1)*ax(0);
+		Jr /= Jr.Norml2();
+		J = Jr;
+	}
 }
 
 // A Cylindrical Rod of constant magnetization.  The cylinder has two

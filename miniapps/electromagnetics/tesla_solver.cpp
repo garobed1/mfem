@@ -85,6 +85,11 @@ TeslaSolver::TeslaSolver(ParMesh & pmesh, int order,
    non_k_bdr_.SetSize(pmesh.bdr_attributes.Max());
    ess_bdr_ = 1;   // All outer surfaces
    non_k_bdr_ = 1; // Surfaces without applied surface currents
+   // ess_bdr_[2] = 0; 
+   // non_k_bdr_[2] = 0; 
+   // ess_bdr_[4] = 0;  
+   // non_k_bdr_[4] = 0; 
+
 
    for (int i=0; i<kbcs.Size(); i++)
    {
@@ -317,7 +322,7 @@ TeslaSolver::Solve()
    if (myid_ == 0) { cout << "Running solver ... " << endl; }
 
    // Initialize the magnetic vector potential with its boundary conditions
-   a_->ProjectCoefficient(*aBCCoef_);
+   //a_->ProjectCoefficient(*aBCCoef_);
 
    
    // Apply surface currents if available
@@ -370,12 +375,15 @@ TeslaSolver::Solve()
    HypreAMS ams(CurlMuInvCurl, HCurlFESpace_);
    ams.SetSingularProblem();
 
-   HyprePCG pcg (CurlMuInvCurl);
-   pcg.SetTol(1e-15);
-   pcg.SetMaxIter(1000);
-   pcg.SetPrintLevel(1);
-   pcg.SetPreconditioner(ams);
-   pcg.Mult(RHS, A);
+   GMRESSolver gmres(MPI_COMM_WORLD);
+   gmres.SetAbsTol(0.0);
+   gmres.SetRelTol(1e-12);
+   gmres.SetMaxIter(100);
+   gmres.SetKDim(10);
+   gmres.SetPrintLevel(0);
+   gmres.SetOperator(CurlMuInvCurl);
+   gmres.SetPreconditioner(ams);
+   gmres.Mult(RHS, A);
 
    // Extract the parallel grid function corresponding to the finite
    // element approximation A. This is the local solution on each
@@ -388,29 +396,29 @@ TeslaSolver::Solve()
    curl_->Mult(*a_, *b_);
 
    // Compute magnetic field (H) from B and M
-   if (myid_ == 0) { cout << "Computing H ... " << flush; }
+   // if (myid_ == 0) { cout << "Computing H ... " << flush; }
 
-   hDivHCurlMuInv_->Mult(*b_, *bd_);
-   if ( m_ )
-   {
-      hDivHCurlMuInv_->AddMult(*m_, *bd_, -1.0 * mu0_);
-   }
+   // hDivHCurlMuInv_->Mult(*b_, *bd_);
+   // if ( m_ )
+   // {
+   //    hDivHCurlMuInv_->AddMult(*m_, *bd_, -1.0 * mu0_);
+   // }
 
-   HypreParMatrix MassHCurl;
-   Vector BD, H;
+   // HypreParMatrix MassHCurl;
+   // Vector BD, H;
 
-   Array<int> dbc_dofs_h;
-   hCurlMass_->FormLinearSystem(dbc_dofs_h, *h_, *bd_, MassHCurl, H, BD);
+   // Array<int> dbc_dofs_h;
+   // hCurlMass_->FormLinearSystem(dbc_dofs_h, *h_, *bd_, MassHCurl, H, BD);
 
-   HyprePCG pcgM(MassHCurl);
-   pcgM.SetTol(1e-15);
-   pcgM.SetMaxIter(1000);
-   pcgM.SetPrintLevel(1);
-   HypreDiagScale diagM;
-   pcgM.SetPreconditioner(diagM);
-   pcgM.Mult(BD, H);
+   // HyprePCG pcgM(MassHCurl);
+   // pcgM.SetTol(1e-15);
+   // pcgM.SetMaxIter(1000);
+   // pcgM.SetPrintLevel(1);
+   // HypreDiagScale diagM;
+   // pcgM.SetPreconditioner(diagM);
+   // pcgM.Mult(BD, H);
 
-   hCurlMass_->RecoverFEMSolution(H, *bd_, *h_);
+   // hCurlMass_->RecoverFEMSolution(H, *bd_, *h_);
 
    if (myid_ == 0) { cout << "done." << flush; }
 
