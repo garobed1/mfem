@@ -10,6 +10,8 @@
 // Software Foundation) version 2.1 dated February 1999.
 
 #include "tesla_solver.hpp"
+#include <fstream>
+#include <iostream>
 
 #ifdef MFEM_USE_MPI
 
@@ -366,9 +368,21 @@ TeslaSolver::Solve()
    HypreParVector A(HCurlFESpace_);
    HypreParVector RHS(HCurlFESpace_);
 
+
    
    curlMuInvCurl_->FormLinearSystem(ess_bdr_tdofs_, *a_, *jd_, CurlMuInvCurl,
                                     A, RHS);
+
+   ofstream myfile;
+   myfile.open("matrix.txt");
+   CurlMuInvCurl.PrintMatlab(myfile);
+   myfile.close();
+
+   // ofstream myfile2;
+   // myfile2.open("rhs.txt");
+   // RHS.Print(myfile2);
+   // myfile2.close();
+
 
    // Define and apply a parallel PCG solver for AX=B with the AMS
    // preconditioner from hypre.

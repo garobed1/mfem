@@ -290,7 +290,6 @@ int main(int argc, char *argv[])
 
    //    // Display the current number of DoFs in each finite element space
 
-#if 0
    Tesla.PrintSizes();
 
       // Assemble all forms
@@ -341,7 +340,6 @@ int main(int argc, char *argv[])
    #ifdef MFEM_USE_STRUMPACK
    cout<<"Strumpack a go\n";
    #endif
-#endif
    return 0;
 }
 
@@ -372,33 +370,35 @@ SetupInvPermeabilityCoefficient()
 double magnetic_shell(const Vector &x)
 {
 
-   if ( x(1) < .5)
+   if ( x(1) <= .5)
    {
-      return ms_params_(0);
+      return 5000.0*4e-7*M_PI;//ms_params_(0);
    }
-   if (x(1) == .5)
-   {
-      return (ms_params_(0)+ms_params_(1));
-   }
+   // if (x(1) == .5)
+   // {
+   //    return (ms_params_(0)+ms_params_(1))/2;
+   // }
    if (x(1) > .5)
    {
-      return ms_params_(1);
+      return 3000.0*4e-7*M_PI;//ms_params_(1);
    }
 }
 
 //assign current density
-void current_ring(const Vector &x, Vector &J)
+void current_ring(const Vector &x, Vector &j)
 {
    j.SetSize(3);
    j = 0.0;
    y = x(1) - .5;
    if ( x(1) < .5)
    {
-      j(2) = -(1/ms_params_(0))*2;
+
+
+      j(2) = -(1/(5000.0*4e-7*M_PI))*2;//(1/ms_params_(0))*2;
    }
    if ( x(1) > .5)
    {
-      j(2) = (1/ms_params_(1))*2;
+      j(2) = (1/(3000.0*4e-7*M_PI))*2;//(1/ms_params_(1))*2;
 
    }
 }
