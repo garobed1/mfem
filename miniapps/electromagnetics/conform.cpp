@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 //    apf::Mesh2* pumi_mesh;
 //    pumi_mesh = apf::loadMdsMesh(model_file, mesh_file);
    mfem::Element::Type tet = Element::TETRAHEDRON;
-   Mesh *mesh = new Mesh(x_param, y_param, z_param, tet, false, 1, 1, 1);
+   Mesh *mesh = new Mesh(x_param, y_param, z_param, tet, false, 1, 1, .1);
 
    int dim = mesh->Dimension();
 
@@ -335,7 +335,7 @@ int main(int argc, char *argv[])
    xban.SaveVTK(mesh_ofs, "analyticb", 0);
 
    cout<<ms_params_(0)<<" "<<ms_params_(1)<<"\n";
-   delete muInvCoef;
+   //delete muInvCoef;
 
    #ifdef MFEM_USE_STRUMPACK
    cout<<"Strumpack a go\n";
@@ -372,7 +372,7 @@ double magnetic_shell(const Vector &x)
 
    if ( x(1) <= .5)
    {
-      return 5000.0*4e-7*M_PI;//ms_params_(0);
+      return 4e-7*M_PI;//ms_params_(0);
    }
    // if (x(1) == .5)
    // {
@@ -380,7 +380,7 @@ double magnetic_shell(const Vector &x)
    // }
    if (x(1) > .5)
    {
-      return 3000.0*4e-7*M_PI;//ms_params_(1);
+      return 4e-7*M_PI;//ms_params_(1);
    }
 }
 
@@ -394,11 +394,11 @@ void current_ring(const Vector &x, Vector &j)
    {
 
 
-      j(2) = -(1/(5000.0*4e-7*M_PI))*2;//(1/ms_params_(0))*2;
+      j(2) = -6*y*(1/(4e-7*M_PI));//(1/ms_params_(0))*2;
    }
    if ( x(1) > .5)
    {
-      j(2) = (1/(3000.0*4e-7*M_PI))*2;//(1/ms_params_(1))*2;
+      j(2) = 6*y*(1/(4e-7*M_PI));//(1/ms_params_(1))*2;
 
    }
 }
@@ -479,11 +479,11 @@ void a_bc_uniform(const Vector & x, Vector & a)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      a(2) = y*y; 
+      a(2) = y*y*y; 
    }
    else 
    {
-      a(2) = -y*y;
+      a(2) = -y*y*y;
    }
    //a(2) = b_uniform_(0) * x(1);
 }
@@ -502,11 +502,11 @@ void sol_analytic(const Vector &x, Vector & a)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      a(2) = y*y; 
+      a(2) = y*y*y; 
    }
    else 
    {
-      a(2) = -y*y;
+      a(2) = -y*y*y;
    }
 }
 
@@ -517,10 +517,10 @@ void sol_b_analytic(const Vector &x, Vector & b)
    y = x(1) - .5;
    if ( x(1) <= .5)
    {
-      b(0) = 2*y;
+      b(0) = 3*y*y;
    }
    else 
    {
-      b(0) = -2*y;
+      b(0) = -3*y*y;
    }
 }
